@@ -1,0 +1,261 @@
+# Dependencies and Setup
+import matplotlib.pyplot as plt
+import pandas as pd
+import scipy.stats as st
+import numpy as np
+
+# Study data files
+mouse_metadata_path = "data/Mouse_metadata.csv"
+study_results_path = "data/Study_results.csv"
+
+# Read the mouse data and the study results
+mouse_metadata = pd.read_csv(mouse_metadata_path)
+study_results = pd.read_csv(study_results_path)
+
+# Combine the data into a single dataset; common ID is Mouse ID
+combined_df = pd.merge(mouse_metadata, study_results, how="outer", on="Mouse ID")
+# Display the data table for preview
+combined_df
+
+# Checking the number of mice.
+combined_df["Mouse ID"].count()
+
+# Getting the duplicate mice by ID number that shows up for Mouse ID and Timepoint. 
+dup_mice = combined_df.set_index("Mouse ID")
+mouse = dup_mice.loc["g989",:]
+mouse.head()
+
+
+# Create a clean DataFrame by dropping the duplicate mouse by its ID.
+dup_removed_mice = dup_mice.drop(index = "g989")
+clean_df = dup_removed_mice.reset_index()
+clean_df.head()
+
+# Checking the number of mice in the clean DataFrame.
+clean_df["Mouse ID"].count()
+
+# Generate a summary statistics table of mean, median, variance, standard deviation, and SEM of the tumor volume for each regimen
+# technically groupby method here... but there is a simpler way (one line) 
+# this first method needs to be a series
+
+tumor_response_mean = clean_df.groupby(["Drug Regimen"])["Tumor Volume (mm3)"].mean()
+tumor_reponse_sem = clean_df.groupby(["Drug Regimen"])["Tumor Volume (mm3)"].sem()
+tumor_response_median = clean_df.groupby(["Drug Regimen"])["Tumor Volume (mm3)"].median()
+tumor_response_variance = clean_df.groupby(["Drug Regimen"])["Tumor Volume (mm3)"].var()
+tumor_response_std = clean_df.groupby(["Drug Regimen"])["Tumor Volume (mm3)"].std()
+
+summary_df = pd.DataFrame({"Mean" : tumor_response_mean,
+                          "Median": tumor_response_median,
+                          "Variance": tumor_response_variance,
+                          "Standard Deviation": tumor_response_std,
+                          "SEM": tumor_reponse_sem})
+summary_df
+
+# This method produces everything in a single groupby function
+
+summary2_df = clean_df.groupby(["Drug Regimen"]).agg({"Tumor Volume (mm3)": ["mean","median","var","std","sem"]})
+summary2_df
+
+# Generate a bar plot showing the total number of mice for each treatment throughout the course of the study using pandas. 
+
+# Found the number of mice by counting unique ID then grouped by drug regimen; sorted descending to make data more relevant
+mice_count = clean_df.groupby(["Drug Regimen"])["Mouse ID"].count().sort_values(ascending=False)
+mice_count_df = mice_count.to_frame()
+pandas_plot = mice_count_df.plot(kind="bar")
+pandas_plot.legend(["Mice"])
+plt.title("Total Number of Mice per Treatment")
+plt.xlabel("Drug Regimen")
+plt.ylabel("Count of Mice")
+
+plt.show()
+
+# Generate a bar plot showing the total number of mice for each treatment throughout the course of the study using pyplot.
+
+# Set x axis and tick locations
+x_axis = np.arange(len(mice_count))
+tick_locations = [value for value in x_axis]
+
+# Create list to write x labels and set fig size
+plt.figure()
+plt.bar(x_axis,mice_count, align="center", width=0.5)
+plt.xticks(tick_locations, list(mice_count.index), rotation="vertical")
+
+# Set x and y limits
+plt.xlim(-0.7, len(x_axis)-0.3)
+plt.ylim(0, max(mice_count)*1.05)
+
+# Set title and labels
+plt.title("Total Number of Mice per Treatment")
+plt.xlabel("Drug Regimen")
+plt.ylabel("Count of Mice")
+legend_name = ["Mice"]
+plt.legend(legend_name, loc="best") 
+
+# Generate a pie plot showing the distribution of female versus male mice using pandas
+
+# First need to make a dataframe of the count of mice gender grouped by gender
+mice_gender_df = clean_df.groupby("Sex")
+mice_gender_count = mice_gender_df["Sex"].count()
+mice_gender_count_df = pd.DataFrame(mice_gender_count)
+
+# construct graph
+mice_gender_graph = mice_gender_count_df.plot(kind="pie", y="Sex", title="Distribution of Female vs Male Mice", startangle= 140, fontsize=12, colors= ["pink", "lightblue"],\
+                                              autopct="%1.1f%%", legend=False)
+plt.axis("equal")
+
+# Generate a pie plot showing the distribution of female versus male mice using pyplot
+
+# get labels for pie chart
+gender = list(mice_gender_count_df.index.values)
+
+#values of each section of pie chart
+gender_values = mice_gender_count_df["Sex"]
+
+# colors of each section 
+colors = ["pink", "lightblue"]
+
+# construct graph
+plt.pie(gender_values, labels=gender, colors=colors, autopct="%1.1f%%", startangle= 140)
+plt.rcParams["font.size"] = 12
+plt.title("Distribution of Female vs Male Mice")
+plt.ylabel("Sex")
+plt.axis("equal")
+plt.show()
+
+
+# Calculate the final tumor volume of each mouse across four of the treatment regimens:  
+# Capomulin, Ramicane, Infubinol, and Ceftamin
+
+# Start by getting the last (greatest) timepoint for each mouse
+
+
+# Merge this group df with the original dataframe to get the tumor volume at the last timepoint
+four_treatments_df = clean_df.loc[(clean_df["Drug Regimen"] == "Capomulin") | 
+                               (clean_df["Drug Regimen"] == "Ramicane") | 
+                               (clean_df["Drug Regimen"] == "Infubinol") | 
+                               (clean_df["Drug Regimen"] == "Ceftamin"), :]
+
+# the four_treatments_df has 814 rows of data! and all four drugs are there
+
+# sorted the df by timepoint
+four_treatments_df = four_treatments_df.sort_values("Timepoint", ascending= False)
+
+# removed duplicates of mouse ID and kept first occurence (or max tumor volume), 100 rows of data
+four_treatments_df = four_treatments_df.drop_duplicates(subset= "Mouse ID", keep= "first")
+
+four_treatments_df
+
+# Put treatments into a list for for loop (and later for plot labels)
+
+drug_name_list = ["Capomulin","Ramicane","Infubinol","Ceftamin"]
+
+# Create empty list to fill with tumor vol data (for plotting)
+
+box_df = pd.DataFrame({"Capomulin": ["","","","","",""],
+                      "Ramicane": ["","","","","",""],
+                      "Infubinol":["","","","","",""],
+                      "Ceftamin": ["","","","","",""]})
+
+box_df = box_df.set_index(keys = [["Lower Quartile", "Median", "Upper Quartile", "IQR", "Lower Bound", "Upper Bound"]])
+
+regimen_groups = four_treatments_df.groupby("Drug Regimen")
+
+# Calculate the IQR and quantitatively determine if there are any potential outliers. 
+
+quartile = regimen_groups["Tumor Volume (mm3)"].quantile([0.25,0.5,0.75])
+for regimen in box_df: 
+    lowerq = quartile[regimen][0.25]
+    median = quartile[regimen][0.5]
+    upperq = quartile[regimen][0.75]
+    iqr = upperq - lowerq
+    lower_bound = lowerq - (1.5*iqr)
+    upper_bound = upperq + (1.5*iqr)
+    box_df[regimen][0] = lowerq
+    box_df[regimen][1] = median
+    box_df[regimen][2] = upperq
+    box_df[regimen][3] = iqr
+    box_df[regimen][4] = lower_bound
+    box_df[regimen][5] = upper_bound
+
+    tumor_data = four_treatments_df.loc[four_treatments_df["Drug Regimen"] == regimen, "Tumor Volume (mm3)"]
+    
+    outliers = tumor_data.loc[(tumor_data > upper_bound) | (tumor_data < lower_bound)]
+    print(outliers)
+    
+box_df
+
+# Generate a box plot of the final tumor volume of each mouse across four regimens of interest
+ram_data = four_treatments_df[four_treatments_df["Drug Regimen"] == "Ramicane"]
+ram_tumor_data = ram_data["Tumor Volume (mm3)"]
+
+cap_data = four_treatments_df[four_treatments_df["Drug Regimen"] == "Capomulin"]
+cap_tumor_data = cap_data["Tumor Volume (mm3)"]
+
+ceft_data = four_treatments_df[four_treatments_df["Drug Regimen"] == "Ceftamin"]
+ceft_tumor_data = ceft_data["Tumor Volume (mm3)"]
+
+inf_data = four_treatments_df[four_treatments_df["Drug Regimen"] == "Infubinol"]
+inf_tumor_data = inf_data["Tumor Volume (mm3)"]
+
+
+tumor_data_list = [ram_tumor_data, cap_tumor_data, ceft_tumor_data, inf_tumor_data]
+labels = ["Ramicane","Capomulin","Ceftamin","Infubinol"]
+fig1, axes = plt.subplots()
+axes.set_title("Drug Regimen Boxplot")
+axes.set_ylabel("Tumor Volume (mm3)")
+axes.boxplot(tumor_data_list, labels = labels)
+plt.show()
+
+# Generate a line plot of time point versus tumor volume for a mouse treated with Capomulin
+capomulin_df = clean_df.loc[(clean_df["Drug Regimen"] == "Capomulin")]
+capomulin_single_df = capomulin_df.loc[(capomulin_df["Mouse ID"] == "s185")]
+
+#variables
+timepoint = capomulin_single_df["Timepoint"]
+tumor_volume = capomulin_single_df["Tumor Volume (mm3)"]
+
+#plotting the line
+tumor_line, = plt.plot(timepoint, tumor_volume)
+
+#construct graph
+plt.xlabel("Timepoint")
+plt.ylabel("Tumor Volume")
+plt.title("s185 Tumor Volume Over Time: Capomulin Treatment")
+plt.show()
+
+# Generate a scatter plot of mouse weight versus average tumor volume for the Capomulin regimen
+
+# variables
+weight = capomulin_df.groupby(capomulin_df["Mouse ID"])["Weight (g)"].mean()
+tumor_volume = capomulin_df.groupby(capomulin_df["Mouse ID"])["Tumor Volume (mm3)"].mean()
+
+# construct graph
+plt.scatter(weight, tumor_volume)
+plt.xlabel("Weight of Mouse")
+plt.ylabel("Tumor Volume")
+plt.show()
+
+# Calculate the correlation coefficient and linear regression model 
+# for mouse weight and average tumor volume for the Capomulin regimen
+
+# variables
+weight = capomulin_df.groupby(capomulin_df["Mouse ID"])["Weight (g)"].mean()
+tumor_volume = capomulin_df.groupby(capomulin_df["Mouse ID"])["Tumor Volume (mm3)"].mean()
+
+# linear regression calculation
+slope, int, r, p, std_err = st.linregress(weight, tumor_volume)
+
+# equation of line
+fit = slope * weight + int
+
+# plot the scatter plot and the linear regression line
+plt.scatter(weight, tumor_volume)
+plt.xlabel("Weight of Mouse")
+plt.ylabel("Tumor Volume")
+plt.plot(weight, fit, "--")
+plt.xticks(weight, rotation=90)
+plt.show()
+
+# correlation coefficient
+cor_cof = round(st.pearsonr(weight, tumor_volume)[0], 2)
+print(f"The correlation coefficient between weight and tumor volume for the Capomulin regimen is {cor_cof}.")
